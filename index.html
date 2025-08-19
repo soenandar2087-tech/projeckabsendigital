@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sistem Absensi Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        
+        .loading { 
+            display: inline-block; 
+            width: 20px; 
+            height: 20px; 
+            border: 3px solid #f3f3f3; 
+            border-top: 3px solid #3498db; 
+            border-radius: 50%; 
+            animation: spin 1s linear infinite; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .btn-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .btn-active:active {
+            transform: translateY(0);
+        }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+
+    <div class="container mx-auto py-4 px-4 max-w-4xl">
+        <!-- Connection Status -->
+        <div id="connectionStatus" class="mb-4 p-3 rounded-lg text-center text-sm font-medium bg-yellow-100 text-yellow-800">
+            📱 Mode Offline - Data tersimpan di perangkat Anda
+        </div>
+
+        <!-- Monthly Status -->
+        <div id="monthlyStatus" class="mb-4 p-4 bg-white rounded-xl shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800">Status Bulan Ini</h3>
+                    <p id="currentMonth" class="text-gray-600 text-sm"></p>
+                    <p id="totalRecords" class="text-blue-600 text-sm font-medium"></p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="showExportModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+                        📊 Export Data
+                    </button>
+                    <button onclick="showTutupBukuModal()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+                        🔒 Tutup Buku
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 text-center mb-3">
+                Sistem Absensi Digital
+            </h1>
+            <div class="text-center text-gray-600">
+                <div id="currentDate" class="text-sm font-medium"></div>
+                <div id="currentTime" class="text-sm"></div>
+            </div>
+        </div>
+
+        <!-- Main Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <!-- Pilih Mandor -->
+            <button onclick="showMandorModal()" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white p-6 rounded-xl shadow-lg btn-hover btn-active transition-all duration-200">
+                <div class="text-3xl mb-3">👷‍♂️</div>
+                <h3 class="text-lg font-semibold mb-2">Pilih Mandor</h3>
+                <p class="text-blue-100 text-sm">Pilih mandor yang bertugas</p>
+            </button>
+
+            <!-- Pilih Pekerjaan -->
+            <button onclick="showPekerjaanModal()" class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white p-6 rounded-xl shadow-lg btn-hover btn-active transition-all duration-200">
+                <div class="text-3xl mb-3">🔧</div>
+                <h3 class="text-lg font-semibold mb-2">Pilih Jenis Pekerjaan</h3>
+                <p class="text-green-100 text-sm">Tentukan jenis pekerjaan</p>
+            </button>
+
+            <!-- Pilih Blok -->
+            <button onclick="showBlokModal()" class="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white p-6 rounded-xl shadow-lg btn-hover btn-active transition-all duration-200">
+                <div class="text-3xl mb-3">🏗️</div>
+                <h3 class="text-lg font-semibold mb-2">Pilih Blok</h3>
+                <p class="text-purple-100 text-sm">Pilih area kerja/blok</p>
+            </button>
+
+            <!-- Pilih Karyawan -->
+            <button onclick="showKaryawanModal()" id="karyawanButton" class="bg-gray-400 text-white p-6 rounded-xl shadow-lg cursor-not-allowed" disabled>
+                <div class="text-3xl mb-3">👥</div>
+                <h3 class="text-lg font-semibold mb-2">Pilih Karyawan</h3>
+                <p class="text-gray-200 text-sm">Pilih mandor terlebih dahulu</p>
+            </button>
+        </div>
+
+        <!-- Status Panel -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Status Pilihan:</h3>
+            <div class="space-y-3">
+                <div class="flex items-center">
+                    <span class="text-blue-600 mr-3 text-xl">👷‍♂️</span>
+                    <span class="text-gray-600">Mandor: </span>
+                    <span id="selectedMandor" class="font-medium text-gray-800 ml-2">Belum dipilih</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-green-600 mr-3 text-xl">🔧</span>
+                    <span class="text-gray-600">Pekerjaan: </span>
+                    <span id="selectedPekerjaan" class="font-medium text-gray-800 ml-2">Belum dipilih</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-purple-600 mr-3 text-xl">🏗️</span>
+                    <span class="text-gray-600">Blok: </span>
+                    <span id="selectedBlok" class="font-medium text-gray-800 ml-2">Belum dipilih</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-orange-600 mr-3 text-xl">👥</span>
+                    <span class="text-gray-600">Karyawan: </span>
+                    <span id="selectedKaryawan" onclick="showSelectedKaryawanModal()" class="font-medium text-gray-800 ml-2 cursor-pointer hover:text-blue-600 hover:underline">Belum dipilih</span>
+                </div>
+            </div>
+            
+            <button onclick="submitAbsensi()" id="submitButton" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-4 px-6 rounded-lg font-semibold transition-colors text-lg btn-hover btn-active">
+                ✅ Simpan Absensi
+            </button>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <button onclick="showManagementPasswordModal()" class="bg-gray-600 hover:bg-gray-700 active:bg-gray-800 text-white py-3 px-4 rounded-lg font-semibold transition-colors btn-hover btn-active">
+                    ⚙️ Manajemen Karyawan
+                </button>
+                
+                <button onclick="showRekapPasswordModal()" class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3 px-4 rounded-lg font-semibold transition-colors btn-hover btn-active">
+                    📊 Rekapitulasi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mandor -->
+    <div id="mandorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-semibold mb-4">Pilih Mandor</h3>
+            <div id="mandorList" class="space-y-3">
+                <!-- Mandor list akan dimuat di sini -->
+            </div>
+            <button onclick="closeMandorModal()" class="mt-4 w-full bg-gray-300 hover:bg-gray-400 active:bg-gray-500 text-gray-700 py-3 px-4 rounded-lg transition-colors">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Modal Password -->
+    <div id="passwordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md border-l-4 border-blue-500">
+            <div class="flex items-center mb-4">
+                <div class="text-3xl mr-3">🔐</div>
+                <h3 class="text-xl font-semibold text-blue-600">Masukkan Password</h3>
+            </div>
+            <p class="text-gray-700 mb-4">Password untuk Mandor: <span id="selectedMandorName" class="font-semibold text-blue-600"></span></p>
+            <div class="mb-4">
+                <input type="password" id="passwordInput" placeholder="Masukkan password..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                <div id="passwordError" class="text-red-600 text-sm mt-2 hidden">Password salah! Silakan coba lagi.</div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="verifyPassword()" class="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Konfirmasi
+                </button>
+                <button onclick="closePasswordModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 active:bg-gray-500 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pekerjaan -->
+    <div id="pekerjaanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-semibold mb-4">Pilih Jenis Pekerjaan</h3>
+            <div class="space-y-3">
+                <button onclick="selectPekerjaan('Chemis')" class="w-full text-left p-3 hover:bg-green-50 rounded-lg border transition-colors">Chemis</button>
+                <button onclick="selectPekerjaan('Babad')" class="w-full text-left p-3 hover:bg-green-50 rounded-lg border transition-colors">Babad</button>
+                <button onclick="selectPekerjaan('Mupuk')" class="w-full text-left p-3 hover:bg-green-50 rounded-lg border transition-colors">Mupuk</button>
+                <button onclick="selectPekerjaan('Lain-lain')" class="w-full text-left p-3 hover:bg-green-50 rounded-lg border transition-colors">Lain-lain</button>
+            </div>
+            
+            <div id="customPekerjaanDiv" class="mt-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Ketik jenis pekerjaan:</label>
+                <input type="text" id="customPekerjaanInput" placeholder="Masukkan jenis pekerjaan..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none mb-3">
+                <button onclick="confirmCustomPekerjaan()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors">Konfirmasi</button>
+            </div>
+            
+            <button onclick="closePekerjaanModal()" class="mt-4 w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg transition-colors">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Modal Blok -->
+    <div id="blokModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-semibold mb-4">Pilih Blok</h3>
+            <div class="space-y-2 max-h-60 overflow-y-auto">
+                <button onclick="selectBlok('F1')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F1</button>
+                <button onclick="selectBlok('F2')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F2</button>
+                <button onclick="selectBlok('F3')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F3</button>
+                <button onclick="selectBlok('F4')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F4</button>
+                <button onclick="selectBlok('F5')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F5</button>
+                <button onclick="selectBlok('F6')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F6</button>
+                <button onclick="selectBlok('F7')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F7</button>
+                <button onclick="selectBlok('F8')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F8</button>
+                <button onclick="selectBlok('F9')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F9</button>
+                <button onclick="selectBlok('F10')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F10</button>
+                <button onclick="selectBlok('F11')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F11</button>
+                <button onclick="selectBlok('F12')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F12</button>
+                <button onclick="selectBlok('F13')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F13</button>
+                <button onclick="selectBlok('F14')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F14</button>
+                <button onclick="selectBlok('F15')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F15</button>
+                <button onclick="selectBlok('F16')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F16</button>
+                <button onclick="selectBlok('F17')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F17</button>
+                <button onclick="selectBlok('F18')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F18</button>
+                <button onclick="selectBlok('F19')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F19</button>
+                <button onclick="selectBlok('F20')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F20</button>
+                <button onclick="selectBlok('F21')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F21</button>
+                <button onclick="selectBlok('F22')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F22</button>
+                <button onclick="selectBlok('F23')" class="w-full text-left p-3 hover:bg-purple-50 rounded-lg border transition-colors">F23</button>
+            </div>
+            <button onclick="closeBlokModal()" class="mt-4 w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg transition-colors">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Modal Karyawan -->
+    <div id="karyawanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Pilih Karyawan - <span id="mandorName"></span></h3>
+                <div class="text-sm text-gray-600">
+                    <span id="selectedCount">0</span> dipilih
+                </div>
+            </div>
+            <div class="mb-4 flex gap-2">
+                <button onclick="selectAllKaryawan()" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors">Pilih Semua</button>
+                <button onclick="clearAllKaryawan()" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded transition-colors">Hapus Semua</button>
+            </div>
+            <div id="karyawanList" class="space-y-2 max-h-60 overflow-y-auto">
+                <!-- Karyawan akan dimuat berdasarkan mandor yang dipilih -->
+            </div>
+            <div class="mt-4 flex gap-3">
+                <button onclick="confirmKaryawanSelection()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors">Konfirmasi Pilihan</button>
+                <button onclick="closeKaryawanModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg transition-colors">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Success -->
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full border-l-4 border-green-500">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">✅</div>
+                <h3 class="text-xl font-semibold text-green-600">Absensi Berhasil Disimpan!</h3>
+            </div>
+            <div id="successDetails" class="bg-green-50 p-4 rounded-lg mb-4">
+                <!-- Detail absensi akan muncul di sini -->
+            </div>
+            <button onclick="closeSuccessModal()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Warning -->
+    <div id="warningModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full border-l-4 border-red-500">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">⚠️</div>
+                <h3 class="text-xl font-semibold text-red-600">Data Belum Lengkap!</h3>
+            </div>
+            <p class="text-gray-700 mb-4">Silakan lengkapi data berikut sebelum menyimpan absensi:</p>
+            <div id="warningList" class="bg-red-50 p-4 rounded-lg mb-4">
+                <!-- Daftar yang belum diisi akan muncul di sini -->
+            </div>
+            <button onclick="closeWarningModal()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                Mengerti, Saya akan Melengkapi Data
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Management Password -->
+    <div id="managementPasswordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full border-l-4 border-yellow-500">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">🔐</div>
+                <h3 class="text-xl font-semibold text-yellow-600">Password Admin</h3>
+            </div>
+            <p class="text-gray-700 mb-4">Masukkan password admin untuk mengakses manajemen karyawan:</p>
+            <div class="mb-4">
+                <input type="password" id="adminPasswordInput" placeholder="Password admin..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 outline-none">
+                <div id="adminPasswordError" class="text-red-600 text-sm mt-2 hidden">Password admin salah!</div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="verifyAdminPassword()" class="flex-1 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Masuk
+                </button>
+                <button onclick="closeManagementPasswordModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 active:bg-gray-500 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Rekap Password -->
+    <div id="rekapPasswordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full border-l-4 border-indigo-500">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">📊</div>
+                <h3 class="text-xl font-semibold text-indigo-600">Password Admin</h3>
+            </div>
+            <p class="text-gray-700 mb-4">Masukkan password admin untuk melihat rekapitulasi:</p>
+            <div class="mb-4">
+                <input type="password" id="rekapPasswordInput" placeholder="Password admin..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                <div id="rekapPasswordError" class="text-red-600 text-sm mt-2 hidden">Password admin salah!</div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="verifyRekapPassword()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Lihat Rekapitulasi
+                </button>
+                <button onclick="closeRekapPasswordModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 active:bg-gray-500 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Export Data -->
+    <div id="exportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">📊</div>
+                <h3 class="text-xl font-semibold text-green-600">Export Data Absensi</h3>
+            </div>
+            
+            <div class="mb-6">
+                <div class="bg-green-50 p-4 rounded-lg mb-4">
+                    <div class="text-sm text-green-800">
+                        <div><strong>Total Data:</strong> <span id="exportTotalData">0</span> record</div>
+                        <div><strong>Periode:</strong> <span id="exportPeriode">-</span></div>
+                        <div><strong>Ukuran File:</strong> <span id="exportFileSize">-</span></div>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <button onclick="exportToCSV()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                        📄 Download CSV (Excel)
+                    </button>
+                    <button onclick="exportToJSON()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                        💾 Download JSON (Backup)
+                    </button>
+                    <button onclick="printReport()" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                        🖨️ Print Laporan
+                    </button>
+                </div>
+            </div>
+            
+            <button onclick="closeExportModal()" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-colors">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Tutup Buku -->
+    <div id="tutupBukuModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full border-l-4 border-red-500">
+            <div class="flex items-center mb-4">
+                <div class="text-4xl mr-3">🔒</div>
+                <h3 class="text-xl font-semibold text-red-600">Tutup Buku Bulanan</h3>
+            </div>
+            
+            <div class="bg-red-50 p-4 rounded-lg mb-4">
+                <p class="text-red-800 text-sm mb-2"><strong>Peringatan:</strong></p>
+                <ul class="text-red-700 text-sm space-y-1">
+                    <li>• Data bulan ini akan diarsipkan</li>
+                    <li>• Input baru akan dimulai bulan depan</li>
+                    <li>• Pastikan sudah export data terlebih dahulu</li>
+                    <li>• Proses ini tidak dapat dibatalkan</li>
+                </ul>
+            </div>
+            
+            <div class="mb-4">
+                <p class="text-gray-700 mb-2">Masukkan password admin untuk konfirmasi:</p>
+                <input type="password" id="tutupBukuPasswordInput" placeholder="Password admin..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
+                <div id="tutupBukuPasswordError" class="text-red-600 text-sm mt-2 hidden">Password admin salah!</div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="confirmTutupBuku()" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors">
+                    🔒 Tutup Buku
+                </button>
+                <button onclick="closeTutupBukuModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-colors">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Rekapitulasi -->
+    <div id="rekapitulasiModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center">
+                    <div class="text-4xl mr-3">📊</div>
+                    <h3 class="text-xl font-semibold text-indigo-600">Rekapitulasi Absensi</h3>
+                </div>
+                <button onclick="closeRekapitulasiModal()" class="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+            </div>
+            
+            <div id="rekapitulasiContent">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Manajemen Karyawan -->
+    <div id="managementModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center">
+                    <div class="text-4xl mr-3">⚙️</div>
+                    <h3 class="text-xl font-semibold text-yellow-600">Manajemen Karyawan</h3>
+                </div>
+                <button onclick="closeManagementModal()" class="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Daftar Mandor -->
+                <div class="lg:col-span-1">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h4 class="font-semibold text-blue-800 mb-3">Daftar Mandor</h4>
+                        <div id="mandorManagementList" class="space-y-2">
+                            <!-- Mandor list will be loaded here -->
+                        </div>
+                        <button onclick="showAddMandorForm()" class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm transition-colors">
+                            + Tambah Mandor
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Karyawan untuk Mandor Terpilih -->
+                <div class="lg:col-span-2">
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-green-800">Karyawan - <span id="selectedMandorForManagement">Pilih Mandor</span></h4>
+                            <button onclick="showAddKaryawanForm()" id="addKaryawanBtn" class="bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded text-sm transition-colors" disabled>
+                                + Tambah Karyawan
+                            </button>
+                        </div>
+                        <div id="karyawanManagementList" class="space-y-2 max-h-60 overflow-y-auto">
+                            <p class="text-gray-500 text-center py-4">Pilih mandor untuk melihat karyawan</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form Section -->
+            <div id="managementFormSection" class="mt-6 hidden">
+                <!-- Forms will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Area (Hidden) -->
+    <div id="printArea" style="display: none;">
+        <!-- Print content will be generated here -->
+    </div>
+
+    <script>
+        // Global Variables
+        let selectedMandorName = '';
+        let selectedKaryawanList = [];
+        let tempSelectedMandor = '';
+        let dailyAttendance = [];
+        let currentMonth = '';
+        let archivedData = {};
+
+        // Data karyawan default
+        let karyawanData = {
+            'Narya': ['ASMANAH', 'ROHETI', 'ARMI', 'WATI', 'SURTI', 'ITA', 'YANI', 'IPAT', 'ATIH', 'KARNI', 'MARIAM', 'ERAH', 'KODIM', 'SENA', 'UBIK', 'SITOL', 'IRPAN', 'ENI', 'SURNI', 'KAENI', 'SATI', 'JUHENI', 'ARMANAH', 'WAWAT', 'ARIMAH', 'SANI', 'UCI', 'UJANG', 'MUDIN', 'SUGIRI', 'ARMIN', 'ASTONI', 'ABIT', 'EPI', 'ARINAH', 'RUSNI', 'SARMUNAH', 'ALIAH', 'ERIK', 'RIAN', 'JASTI', 'IPAN', 'SUMAN'],
+            'Heri': ['ASMAH', 'ANI', 'MARYATI', 'ENOH', 'MASNAH', 'SUKAESIH', 'ARNAWATI', 'ENUNG', 'AMINAH', 'NANIH', 'ERNA', 'JANAH', 'MAMAN', 'IYUS', 'KAMAH', 'ENCUN', 'ULPAH', 'EMUT', 'PEPENG', 'AMINAH', 'ROPIAH', 'ENONG', 'UNAS', 'RISKI', 'ASRI', 'SANUDIN', 'ARIP', 'T', 'ENONG'],
+            'Udi': ['NANDI', 'GUNAWAN', 'BAH KANTOR', 'HENDAR', 'RIKO', 'JUNARIAH', 'MIAH', 'TIMAH', 'EPI', 'SANDI', 'KENDARAAN', 'BBM']
+        };
+
+        // Password untuk setiap mandor
+        const mandorPasswords = {
+            'Heri': '1234',
+            'Narya': '5678',
+            'Udi': '9012'
+        };
+
+        // Password admin untuk manajemen
+        const adminPassword = 'admin123';
+
+        // Initialize App
+        function initializeApp() {
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+            updateMandorModal();
+            loadLocalData();
+            updateMonthlyStatus();
+            
+            // Event listeners
+            document.getElementById('passwordInput').addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') verifyPassword();
+            });
+            
+            document.getElementById('customPekerjaanInput').addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') confirmCustomPekerjaan();
+            });
+
+            document.getElementById('adminPasswordInput').addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') verifyAdminPassword();
+            });
+
+            document.getElementById('rekapPasswordInput').addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') verifyRekapPassword();
+            });
+
+            document.getElementById('tutupBukuPasswordInput').addEventListener('keypress', function(event) {
+                if (event.key === 'Enter') confirmTutupBuku();
+            });
+        }
+
+        // Data Management Functions
+        function loadLocalData() {
+            // Load current month data
+            const now = new Date();
+            currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            
+            const monthlyKey = `absensiData_${currentMonth}`;
+            const localData = JSON.parse(localStorage.getItem(monthlyKey) || '[]');
+            dailyAttendance = localData;
+
+            // Load archived data
+            archivedData = JSON.parse(localStorage.getItem('archivedData') || '{}');
+            
+            // Load saved karyawan data and passwords
+            const savedKaryawanData = localStorage.getItem('karyawanData');
+            const savedMandorPasswords = localStorage.getItem('mandorPasswords');
+            
+            if (savedKaryawanData) {
+                karyawanData = JSON.parse(savedKaryawanData);
+            }
+            
+            if (savedMandorPasswords) {
+                Object.assign(mandorPasswords, JSON.parse(savedMandorPasswords));
+            }
+        }
+
+        function saveLocalData() {
+            const monthlyKey = `absensiData_${currentMonth}`;
+            localStorage.setItem(monthlyKey, JSON.stringify(dailyAttendance));
+            
+            // Auto backup every save
+            createAutoBackup();
+        }
+
+        function createAutoBackup() {
+            const backupData = {
+                currentMonth: currentMonth,
+                currentData: dailyAttendance,
+                archivedData: archivedData,
+                karyawanData: karyawanData,
+                timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem('autoBackup', JSON.stringify(backupData));
+        }
+
+        function updateMonthlyStatus() {
+            const now = new Date();
+            const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+                              'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            
+            document.getElementById('currentMonth').textContent = 
+                `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+            
+            document.getElementById('totalRecords').textContent = 
+                `${dailyAttendance.length} data absensi tercatat`;
+        }
+
+        // Export Functions
+        function showExportModal() {
+            updateExportInfo();
+            document.getElementById('exportModal').classList.remove('hidden');
+            document.getElementById('exportModal').classList.add('flex');
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').classList.add('hidden');
+            document.getElementById('exportModal').classList.remove('flex');
+        }
+
+        function updateExportInfo() {
+            const totalData = dailyAttendance.length;
+            const dataSize = JSON.stringify(dailyAttendance).length;
+            const sizeKB = Math.round(dataSize / 1024 * 100) / 100;
+            
+            document.getElementById('exportTotalData').textContent = totalData;
+            document.getElementById('exportPeriode').textContent = currentMonth;
+            document.getElementById('exportFileSize').textContent = `${sizeKB} KB`;
+        }
+
+        function exportToCSV() {
+            if (dailyAttendance.length === 0) {
+                alert('Tidak ada data untuk di-export!');
+                return;
+            }
+
+            // Add BOM for proper UTF-8 encoding in Excel
+            let csvContent = '\uFEFF';
+            csvContent += 'No,Tanggal,Waktu,Mandor,Pekerjaan,Blok,Jumlah Karyawan,Daftar Karyawan\n';
+            
+            dailyAttendance.forEach((record, index) => {
+                const karyawanList = record.karyawan.join('; ');
+                csvContent += `${index + 1},"${record.tanggal}","${record.waktu}","${record.mandor}","${record.pekerjaan}","${record.blok}",${record.karyawan.length},"${karyawanList}"\n`;
+            });
+
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Absensi_${currentMonth}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            URL.revokeObjectURL(url);
+            closeExportModal();
+            
+            // Show success message
+            setTimeout(() => {
+                alert('✅ File CSV berhasil didownload!');
+            }, 500);
+        }
+
+        function exportToJSON() {
+            if (dailyAttendance.length === 0) {
+                alert('Tidak ada data untuk di-export!');
+                return;
+            }
+
+            const exportData = {
+                periode: currentMonth,
+                totalRecords: dailyAttendance.length,
+                exportDate: new Date().toISOString(),
+                data: dailyAttendance,
+                karyawanData: karyawanData,
+                mandorPasswords: mandorPasswords
+            };
+
+            const jsonContent = JSON.stringify(exportData, null, 2);
+            
+            // Create and trigger download
+            const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Backup_Absensi_${currentMonth}.json`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            URL.revokeObjectURL(url);
+            closeExportModal();
+            
+            // Show success message
+            setTimeout(() => {
+                alert('✅ File JSON backup berhasil didownload!');
+            }, 500);
+        }
+
+        function printReport() {
+            if (dailyAttendance.length === 0) {
+                alert('Tidak ada data untuk di-print!');
+                return;
+            }
+
+            generatePrintContent();
+            closeExportModal();
+            
+            // Small delay to ensure modal is closed before printing
+            setTimeout(() => {
+                window.print();
+            }, 300);
+        }
+
+        function generatePrintContent() {
+            const printArea = document.getElementById('printArea');
+            const now = new Date();
+            
+            let html = `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="margin: 0; color: #333;">LAPORAN ABSENSI KARYAWAN</h1>
+                        <h2 style="margin: 10px 0; color: #666;">Periode: ${currentMonth}</h2>
+                        <p style="margin: 0; color: #888;">Dicetak pada: ${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID')}</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <p><strong>Total Data:</strong> ${dailyAttendance.length} record</p>
+                        <p><strong>Periode:</strong> ${currentMonth}</p>
+                    </div>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                        <thead>
+                            <tr style="background-color: #f5f5f5;">
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">No</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Tanggal</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Waktu</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Mandor</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Pekerjaan</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Blok</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Jml</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Karyawan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            dailyAttendance.forEach((record, index) => {
+                const karyawanList = record.karyawan.join(', ');
+                html += `
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${index + 1}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.tanggal}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.waktu}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.mandor}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.pekerjaan}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.blok}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${record.karyawan.length}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px; font-size: 10px;">${karyawanList}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 30px; text-align: right;">
+                        <p>Mengetahui,</p>
+                        <br><br><br>
+                        <p>(_________________)</p>
+                        <p>Admin/Supervisor</p>
+                    </div>
+                </div>
+            `;
+            
+            printArea.innerHTML = html;
+        }
+
+
+
+        // Tutup Buku Functions
+        function showTutupBukuModal() {
+            document.getElementById('tutupBukuModal').classList.remove('hidden');
+            document.getElementById('tutupBukuModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('tutupBukuPasswordInput').focus();
+            }, 100);
+        }
+
+        function closeTutupBukuModal() {
+            document.getElementById('tutupBukuModal').classList.add('hidden');
+            document.getElementById('tutupBukuModal').classList.remove('flex');
+            document.getElementById('tutupBukuPasswordInput').value = '';
+            document.getElementById('tutupBukuPasswordError').classList.add('hidden');
+        }
+
+        function confirmTutupBuku() {
+            const inputPassword = document.getElementById('tutupBukuPasswordInput').value;
+            
+            if (inputPassword !== adminPassword) {
+                document.getElementById('tutupBukuPasswordError').classList.remove('hidden');
+                document.getElementById('tutupBukuPasswordInput').value = '';
+                document.getElementById('tutupBukuPasswordInput').focus();
+                return;
+            }
+
+            if (dailyAttendance.length === 0) {
+                alert('Tidak ada data untuk ditutup buku!');
+                return;
+            }
+
+            // Konfirmasi final
+            if (!confirm(`Yakin ingin menutup buku untuk periode ${currentMonth}?\n\nData akan diarsipkan dan tidak bisa diubah lagi.`)) {
+                return;
+            }
+
+            // Archive current month data
+            archivedData[currentMonth] = {
+                data: [...dailyAttendance],
+                closedDate: new Date().toISOString(),
+                totalRecords: dailyAttendance.length
+            };
+
+            // Save archived data
+            localStorage.setItem('archivedData', JSON.stringify(archivedData));
+
+            // Clear current month data
+            dailyAttendance = [];
+            saveLocalData();
+
+            // Update month to next month
+            const now = new Date();
+            now.setMonth(now.getMonth() + 1);
+            currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            // Update UI
+            updateMonthlyStatus();
+            resetForm();
+            closeTutupBukuModal();
+
+            alert(`✅ Buku berhasil ditutup!\n\nData periode sebelumnya telah diarsipkan.\nSekarang input untuk periode: ${currentMonth}`);
+        }
+
+        // Modal Functions
+        function showMandorModal() {
+            document.getElementById('mandorModal').classList.remove('hidden');
+            document.getElementById('mandorModal').classList.add('flex');
+        }
+
+        function closeMandorModal() {
+            document.getElementById('mandorModal').classList.add('hidden');
+            document.getElementById('mandorModal').classList.remove('flex');
+        }
+
+        function showPasswordModal() {
+            document.getElementById('passwordModal').classList.remove('hidden');
+            document.getElementById('passwordModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('passwordInput').focus();
+            }, 100);
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.add('hidden');
+            document.getElementById('passwordModal').classList.remove('flex');
+            tempSelectedMandor = '';
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordError').classList.add('hidden');
+        }
+
+        function showPekerjaanModal() {
+            document.getElementById('pekerjaanModal').classList.remove('hidden');
+            document.getElementById('pekerjaanModal').classList.add('flex');
+        }
+
+        function closePekerjaanModal() {
+            document.getElementById('pekerjaanModal').classList.add('hidden');
+            document.getElementById('pekerjaanModal').classList.remove('flex');
+            document.getElementById('customPekerjaanDiv').classList.add('hidden');
+            document.getElementById('customPekerjaanInput').value = '';
+        }
+
+        function showBlokModal() {
+            document.getElementById('blokModal').classList.remove('hidden');
+            document.getElementById('blokModal').classList.add('flex');
+        }
+
+        function closeBlokModal() {
+            document.getElementById('blokModal').classList.add('hidden');
+            document.getElementById('blokModal').classList.remove('flex');
+        }
+
+        function showKaryawanModal() {
+            if (selectedMandorName === '') {
+                alert('Silakan pilih mandor terlebih dahulu!');
+                return;
+            }
+            
+            loadKaryawanByMandor(selectedMandorName);
+            document.getElementById('karyawanModal').classList.remove('hidden');
+            document.getElementById('karyawanModal').classList.add('flex');
+        }
+
+        function closeKaryawanModal() {
+            document.getElementById('karyawanModal').classList.add('hidden');
+            document.getElementById('karyawanModal').classList.remove('flex');
+        }
+
+        function showSuccessModal(tanggal, waktu, mandor, pekerjaan, blok, karyawanDetail) {
+            const successDetails = document.getElementById('successDetails');
+            successDetails.innerHTML = `
+                <div class="space-y-2 text-sm">
+                    <div><strong>Tanggal:</strong> ${tanggal}</div>
+                    <div><strong>Waktu:</strong> ${waktu}</div>
+                    <div><strong>Mandor:</strong> ${mandor}</div>
+                    <div><strong>Jenis Pekerjaan:</strong> ${pekerjaan}</div>
+                    <div><strong>Blok:</strong> ${blok}</div>
+                    <div><strong>Karyawan:</strong> ${karyawanDetail}</div>
+                </div>
+            `;
+            
+            document.getElementById('successModal').classList.remove('hidden');
+            document.getElementById('successModal').classList.add('flex');
+        }
+
+        function closeSuccessModal() {
+            document.getElementById('successModal').classList.add('hidden');
+            document.getElementById('successModal').classList.remove('flex');
+            
+            // Reset form
+            resetForm();
+        }
+
+        function showWarningModal(belumDiisi) {
+            const warningList = document.getElementById('warningList');
+            warningList.innerHTML = belumDiisi.map(item => `<div class="text-red-700 font-medium">${item}</div>`).join('');
+            
+            document.getElementById('warningModal').classList.remove('hidden');
+            document.getElementById('warningModal').classList.add('flex');
+        }
+
+        function closeWarningModal() {
+            document.getElementById('warningModal').classList.add('hidden');
+            document.getElementById('warningModal').classList.remove('flex');
+        }
+
+        function showSelectedKaryawanModal() {
+            if (selectedKaryawanList.length === 0) {
+                alert('Belum ada karyawan yang dipilih!');
+                return;
+            }
+            alert(`Karyawan yang dipilih (${selectedKaryawanList.length}):\n${selectedKaryawanList.join('\n')}`);
+        }
+
+        function showManagementPasswordModal() {
+            document.getElementById('managementPasswordModal').classList.remove('hidden');
+            document.getElementById('managementPasswordModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('adminPasswordInput').focus();
+            }, 100);
+        }
+
+        function closeManagementPasswordModal() {
+            document.getElementById('managementPasswordModal').classList.add('hidden');
+            document.getElementById('managementPasswordModal').classList.remove('flex');
+            document.getElementById('adminPasswordInput').value = '';
+            document.getElementById('adminPasswordError').classList.add('hidden');
+        }
+
+        function showRekapPasswordModal() {
+            document.getElementById('rekapPasswordModal').classList.remove('hidden');
+            document.getElementById('rekapPasswordModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('rekapPasswordInput').focus();
+            }, 100);
+        }
+
+        function closeRekapPasswordModal() {
+            document.getElementById('rekapPasswordModal').classList.add('hidden');
+            document.getElementById('rekapPasswordModal').classList.remove('flex');
+            document.getElementById('rekapPasswordInput').value = '';
+            document.getElementById('rekapPasswordError').classList.add('hidden');
+        }
+
+        function showRekapitulasiModal() {
+            generateRekapitulasi();
+            document.getElementById('rekapitulasiModal').classList.remove('hidden');
+            document.getElementById('rekapitulasiModal').classList.add('flex');
+        }
+
+        function closeRekapitulasiModal() {
+            document.getElementById('rekapitulasiModal').classList.add('hidden');
+            document.getElementById('rekapitulasiModal').classList.remove('flex');
+        }
+
+        function generateRekapitulasi() {
+            const content = document.getElementById('rekapitulasiContent');
+            
+            if (dailyAttendance.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-6xl mb-4">📊</div>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-2">Belum Ada Data</h3>
+                        <p class="text-gray-500">Silakan input absensi terlebih dahulu</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Generate statistics
+            const stats = generateStatistics();
+            
+            let html = `
+                <div class="space-y-6">
+                    <!-- Summary Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h4 class="font-semibold text-blue-800">Total Absensi</h4>
+                            <p class="text-2xl font-bold text-blue-600">${stats.totalRecords}</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <h4 class="font-semibold text-green-800">Total Karyawan</h4>
+                            <p class="text-2xl font-bold text-green-600">${stats.totalWorkers}</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <h4 class="font-semibold text-purple-800">Hari Kerja</h4>
+                            <p class="text-2xl font-bold text-purple-600">${stats.workingDays}</p>
+                        </div>
+                    </div>
+
+                    <!-- By Mandor -->
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-3">Rekapitulasi per Mandor</h4>
+                        <div class="space-y-2">
+            `;
+
+            Object.entries(stats.byMandor).forEach(([mandor, data]) => {
+                html += `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <span class="font-medium">${mandor}</span>
+                        <span class="text-sm text-gray-600">${data.records} absensi, ${data.workers} karyawan</span>
+                    </div>
+                `;
+            });
+
+            html += `
+                        </div>
+                    </div>
+
+                    <!-- Recent Records -->
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-3">Data Terbaru (10 terakhir)</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b">
+                                        <th class="text-left p-2">Tanggal</th>
+                                        <th class="text-left p-2">Mandor</th>
+                                        <th class="text-left p-2">Pekerjaan</th>
+                                        <th class="text-left p-2">Blok</th>
+                                        <th class="text-left p-2">Karyawan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+
+            const recentRecords = dailyAttendance.slice(-10).reverse();
+            recentRecords.forEach(record => {
+                html += `
+                    <tr class="border-b">
+                        <td class="p-2">${record.tanggal}</td>
+                        <td class="p-2">${record.mandor}</td>
+                        <td class="p-2">${record.pekerjaan}</td>
+                        <td class="p-2">${record.blok}</td>
+                        <td class="p-2">${record.karyawan.length} orang</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
+        function generateStatistics() {
+            const stats = {
+                totalRecords: dailyAttendance.length,
+                totalWorkers: 0,
+                workingDays: 0,
+                byMandor: {},
+                byPekerjaan: {},
+                byBlok: {}
+            };
+
+            const uniqueDates = new Set();
+            const allWorkers = new Set();
+
+            dailyAttendance.forEach(record => {
+                // Count unique dates
+                uniqueDates.add(record.tanggal);
+                
+                // Count all workers
+                record.karyawan.forEach(worker => allWorkers.add(worker));
+                
+                // Count by mandor
+                if (!stats.byMandor[record.mandor]) {
+                    stats.byMandor[record.mandor] = { records: 0, workers: new Set() };
+                }
+                stats.byMandor[record.mandor].records++;
+                record.karyawan.forEach(worker => stats.byMandor[record.mandor].workers.add(worker));
+                
+                // Count by pekerjaan
+                if (!stats.byPekerjaan[record.pekerjaan]) {
+                    stats.byPekerjaan[record.pekerjaan] = 0;
+                }
+                stats.byPekerjaan[record.pekerjaan]++;
+                
+                // Count by blok
+                if (!stats.byBlok[record.blok]) {
+                    stats.byBlok[record.blok] = 0;
+                }
+                stats.byBlok[record.blok]++;
+            });
+
+            stats.totalWorkers = allWorkers.size;
+            stats.workingDays = uniqueDates.size;
+
+            // Convert worker sets to counts
+            Object.keys(stats.byMandor).forEach(mandor => {
+                stats.byMandor[mandor].workers = stats.byMandor[mandor].workers.size;
+            });
+
+            return stats;
+        }
+
+        // Selection Functions
+        function updateMandorModal() {
+            const mandorList = document.getElementById('mandorList');
+            mandorList.innerHTML = '';
+            
+            Object.keys(karyawanData).forEach(mandor => {
+                const button = document.createElement('button');
+                button.onclick = () => selectMandorWithPassword(mandor);
+                button.className = 'w-full text-left p-3 hover:bg-blue-50 rounded-lg border transition-colors';
+                button.textContent = mandor;
+                mandorList.appendChild(button);
+            });
+        }
+
+        function selectMandorWithPassword(mandor) {
+            tempSelectedMandor = mandor;
+            document.getElementById('selectedMandorName').textContent = mandor;
+            
+            closeMandorModal();
+            showPasswordModal();
+        }
+
+        function verifyPassword() {
+            const inputPassword = document.getElementById('passwordInput').value;
+            const correctPassword = mandorPasswords[tempSelectedMandor];
+            
+            if (inputPassword === correctPassword) {
+                selectedMandorName = tempSelectedMandor;
+                document.getElementById('selectedMandor').textContent = tempSelectedMandor;
+                
+                // Reset karyawan selection
+                selectedKaryawanList = [];
+                document.getElementById('selectedKaryawan').textContent = 'Belum dipilih';
+                
+                // Enable karyawan button
+                const karyawanButton = document.getElementById('karyawanButton');
+                karyawanButton.disabled = false;
+                karyawanButton.className = 'bg-orange-600 hover:bg-orange-700 text-white p-6 rounded-xl shadow-lg btn-hover btn-active transition-all duration-200 cursor-pointer';
+                karyawanButton.querySelector('p').textContent = 'Pilih karyawan untuk absen';
+                karyawanButton.querySelector('p').className = 'text-orange-100 text-sm';
+                
+                closePasswordModal();
+            } else {
+                document.getElementById('passwordError').classList.remove('hidden');
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordInput').focus();
+            }
+        }
+
+        function selectPekerjaan(pekerjaan) {
+            if (pekerjaan === 'Lain-lain') {
+                document.getElementById('customPekerjaanDiv').classList.remove('hidden');
+                document.getElementById('customPekerjaanInput').value = '';
+                setTimeout(() => {
+                    document.getElementById('customPekerjaanInput').focus();
+                }, 100);
+            } else {
+                document.getElementById('selectedPekerjaan').textContent = pekerjaan;
+                closePekerjaanModal();
+            }
+        }
+
+        function confirmCustomPekerjaan() {
+            const customPekerjaan = document.getElementById('customPekerjaanInput').value.trim();
+            
+            if (!customPekerjaan) {
+                alert('Silakan masukkan jenis pekerjaan!');
+                return;
+            }
+            
+            document.getElementById('selectedPekerjaan').textContent = customPekerjaan;
+            closePekerjaanModal();
+        }
+
+        function selectBlok(blok) {
+            document.getElementById('selectedBlok').textContent = blok;
+            closeBlokModal();
+        }
+
+        function loadKaryawanByMandor(mandor) {
+            const karyawanList = document.getElementById('karyawanList');
+            const mandorNameSpan = document.getElementById('mandorName');
+            
+            mandorNameSpan.textContent = mandor;
+            karyawanList.innerHTML = '';
+            selectedKaryawanList = [];
+            updateSelectedCount();
+            
+            const karyawans = karyawanData[mandor] || [];
+            karyawans.forEach(karyawan => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center p-3 hover:bg-orange-50 rounded-lg border transition-colors';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `karyawan_${karyawan}`;
+                checkbox.value = karyawan;
+                checkbox.className = 'mr-3 w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500';
+                checkbox.onchange = () => toggleKaryawan(karyawan);
+                
+                const label = document.createElement('label');
+                label.htmlFor = `karyawan_${karyawan}`;
+                label.className = 'flex-1 cursor-pointer';
+                label.textContent = karyawan;
+                
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                karyawanList.appendChild(div);
+            });
+        }
+
+        function toggleKaryawan(karyawan) {
+            const index = selectedKaryawanList.indexOf(karyawan);
+            if (index > -1) {
+                selectedKaryawanList.splice(index, 1);
+            } else {
+                selectedKaryawanList.push(karyawan);
+            }
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selectedCount').textContent = selectedKaryawanList.length;
+        }
+
+        function selectAllKaryawan() {
+            const checkboxes = document.querySelectorAll('#karyawanList input[type="checkbox"]');
+            selectedKaryawanList = [];
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                selectedKaryawanList.push(checkbox.value);
+            });
+            updateSelectedCount();
+        }
+
+        function clearAllKaryawan() {
+            const checkboxes = document.querySelectorAll('#karyawanList input[type="checkbox"]');
+            selectedKaryawanList = [];
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateSelectedCount();
+        }
+
+        function confirmKaryawanSelection() {
+            if (selectedKaryawanList.length === 0) {
+                alert('Silakan pilih minimal satu karyawan!');
+                return;
+            }
+            
+            const karyawanText = selectedKaryawanList.length === 1 
+                ? selectedKaryawanList[0] 
+                : `${selectedKaryawanList.length} karyawan dipilih`;
+            
+            document.getElementById('selectedKaryawan').textContent = karyawanText;
+            closeKaryawanModal();
+        }
+
+        // Save Functions
+        async function submitAbsensi() {
+            const mandor = document.getElementById('selectedMandor').textContent;
+            const pekerjaan = document.getElementById('selectedPekerjaan').textContent;
+            const blok = document.getElementById('selectedBlok').textContent;
+            const karyawan = document.getElementById('selectedKaryawan').textContent;
+
+            let belumDiisi = [];
+            
+            if (mandor === 'Belum dipilih') belumDiisi.push('• Mandor');
+            if (pekerjaan === 'Belum dipilih') belumDiisi.push('• Jenis Pekerjaan');
+            if (blok === 'Belum dipilih') belumDiisi.push('• Blok');
+            if (karyawan === 'Belum dipilih' || selectedKaryawanList.length === 0) belumDiisi.push('• Karyawan');
+
+            if (belumDiisi.length > 0) {
+                showWarningModal(belumDiisi);
+                return;
+            }
+
+            const submitButton = document.getElementById('submitButton');
+            const originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '<div class="loading mr-2"></div>Menyimpan...';
+            submitButton.disabled = true;
+
+            try {
+                const now = new Date();
+                const tanggal = now.toLocaleDateString('id-ID');
+                const waktu = now.toLocaleTimeString('id-ID');
+                
+                const attendanceData = {
+                    id: dailyAttendance.length + 1,
+                    tanggal: tanggal,
+                    waktu: waktu,
+                    mandor: mandor,
+                    pekerjaan: pekerjaan,
+                    blok: blok,
+                    karyawan: [...selectedKaryawanList]
+                };
+                
+                // Simulate saving delay
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                // Save to local storage
+                dailyAttendance.push(attendanceData);
+                saveLocalData();
+                updateMonthlyStatus();
+                
+                let karyawanDetail = selectedKaryawanList.length === 1 
+                    ? selectedKaryawanList[0] 
+                    : `${selectedKaryawanList.length} karyawan: ${selectedKaryawanList.slice(0, 3).join(', ')}${selectedKaryawanList.length > 3 ? '...' : ''}`;
+
+                showSuccessModal(tanggal, waktu, mandor, pekerjaan, blok, karyawanDetail);
+                
+            } catch (error) {
+                alert('Gagal menyimpan absensi: ' + error.message);
+            } finally {
+                submitButton.innerHTML = originalText;
+                submitButton.disabled = false;
+            }
+        }
+
+        // Admin Functions
+        function verifyAdminPassword() {
+            const inputPassword = document.getElementById('adminPasswordInput').value;
+            
+            if (inputPassword === adminPassword) {
+                closeManagementPasswordModal();
+                showManagementModal();
+            } else {
+                document.getElementById('adminPasswordError').classList.remove('hidden');
+                document.getElementById('adminPasswordInput').value = '';
+                document.getElementById('adminPasswordInput').focus();
+            }
+        }
+
+        function verifyRekapPassword() {
+            const inputPassword = document.getElementById('rekapPasswordInput').value;
+            
+            if (inputPassword === adminPassword) {
+                closeRekapPasswordModal();
+                showRekapitulasiModal();
+            } else {
+                document.getElementById('rekapPasswordError').classList.remove('hidden');
+                document.getElementById('rekapPasswordInput').value = '';
+                document.getElementById('rekapPasswordInput').focus();
+            }
+        }
+
+        // Utility Functions
+        function updateDateTime() {
+            const now = new Date();
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID', dateOptions);
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('id-ID', timeOptions);
+        }
+
+        function resetForm() {
+            selectedMandorName = '';
+            selectedKaryawanList = [];
+            
+            document.getElementById('selectedMandor').textContent = 'Belum dipilih';
+            document.getElementById('selectedPekerjaan').textContent = 'Belum dipilih';
+            document.getElementById('selectedBlok').textContent = 'Belum dipilih';
+            document.getElementById('selectedKaryawan').textContent = 'Belum dipilih';
+            
+            // Disable karyawan button
+            const karyawanButton = document.getElementById('karyawanButton');
+            karyawanButton.disabled = true;
+            karyawanButton.className = 'bg-gray-400 text-white p-6 rounded-xl shadow-lg cursor-not-allowed';
+            karyawanButton.querySelector('p').textContent = 'Pilih mandor terlebih dahulu';
+            karyawanButton.querySelector('p').className = 'text-gray-200 text-sm';
+        }
+
+        // Management Functions
+        let selectedMandorForManagement = '';
+
+        function showManagementModal() {
+            loadMandorManagementList();
+            document.getElementById('managementModal').classList.remove('hidden');
+            document.getElementById('managementModal').classList.add('flex');
+        }
+
+        function closeManagementModal() {
+            document.getElementById('managementModal').classList.add('hidden');
+            document.getElementById('managementModal').classList.remove('flex');
+            hideManagementForm();
+        }
+
+        function loadMandorManagementList() {
+            const mandorList = document.getElementById('mandorManagementList');
+            mandorList.innerHTML = '';
+            
+            Object.keys(karyawanData).forEach(mandor => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-2 bg-white rounded border';
+                
+                const button = document.createElement('button');
+                button.onclick = () => selectMandorForManagement(mandor);
+                button.className = 'flex-1 text-left hover:text-blue-600 transition-colors';
+                button.textContent = mandor;
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.onclick = () => deleteMandor(mandor);
+                deleteBtn.className = 'text-red-500 hover:text-red-700 text-sm ml-2';
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.title = 'Hapus Mandor';
+                
+                div.appendChild(button);
+                div.appendChild(deleteBtn);
+                mandorList.appendChild(div);
+            });
+        }
+
+        function selectMandorForManagement(mandor) {
+            selectedMandorForManagement = mandor;
+            document.getElementById('selectedMandorForManagement').textContent = mandor;
+            document.getElementById('addKaryawanBtn').disabled = false;
+            document.getElementById('addKaryawanBtn').className = 'bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded text-sm transition-colors';
+            
+            loadKaryawanManagementList(mandor);
+        }
+
+        function loadKaryawanManagementList(mandor) {
+            const karyawanList = document.getElementById('karyawanManagementList');
+            karyawanList.innerHTML = '';
+            
+            const karyawans = karyawanData[mandor] || [];
+            
+            if (karyawans.length === 0) {
+                karyawanList.innerHTML = '<p class="text-gray-500 text-center py-4">Belum ada karyawan</p>';
+                return;
+            }
+            
+            karyawans.forEach(karyawan => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-2 bg-white rounded border';
+                
+                const span = document.createElement('span');
+                span.textContent = karyawan;
+                span.className = 'flex-1';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.onclick = () => deleteKaryawan(mandor, karyawan);
+                deleteBtn.className = 'text-red-500 hover:text-red-700 text-sm';
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.title = 'Hapus Karyawan';
+                
+                div.appendChild(span);
+                div.appendChild(deleteBtn);
+                karyawanList.appendChild(div);
+            });
+        }
+
+        function showAddMandorForm() {
+            const formSection = document.getElementById('managementFormSection');
+            formSection.innerHTML = `
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h4 class="font-semibold text-blue-800 mb-3">Tambah Mandor Baru</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nama Mandor:</label>
+                            <input type="text" id="newMandorName" placeholder="Masukkan nama mandor..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Password:</label>
+                            <input type="text" id="newMandorPassword" placeholder="Masukkan password..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="addNewMandor()" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors">
+                            Tambah Mandor
+                        </button>
+                        <button onclick="hideManagementForm()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition-colors">
+                            Batal
+                        </button>
+                    </div>
+                </div>
+            `;
+            formSection.classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('newMandorName').focus();
+            }, 100);
+        }
+
+        function showAddKaryawanForm() {
+            if (!selectedMandorForManagement) {
+                alert('Pilih mandor terlebih dahulu!');
+                return;
+            }
+            
+            const formSection = document.getElementById('managementFormSection');
+            formSection.innerHTML = `
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h4 class="font-semibold text-green-800 mb-3">Tambah Karyawan untuk ${selectedMandorForManagement}</h4>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Nama Karyawan:</label>
+                        <input type="text" id="newKaryawanName" placeholder="Masukkan nama karyawan..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+                    </div>
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="addNewKaryawan()" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors">
+                            Tambah Karyawan
+                        </button>
+                        <button onclick="hideManagementForm()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition-colors">
+                            Batal
+                        </button>
+                    </div>
+                </div>
+            `;
+            formSection.classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('newKaryawanName').focus();
+            }, 100);
+        }
+
+        function hideManagementForm() {
+            document.getElementById('managementFormSection').classList.add('hidden');
+        }
+
+        function addNewMandor() {
+            const name = document.getElementById('newMandorName').value.trim();
+            const password = document.getElementById('newMandorPassword').value.trim();
+            
+            if (!name) {
+                alert('Nama mandor tidak boleh kosong!');
+                return;
+            }
+            
+            if (!password) {
+                alert('Password tidak boleh kosong!');
+                return;
+            }
+            
+            if (karyawanData[name]) {
+                alert('Mandor dengan nama tersebut sudah ada!');
+                return;
+            }
+            
+            // Add new mandor
+            karyawanData[name] = [];
+            mandorPasswords[name] = password;
+            
+            // Save to localStorage
+            localStorage.setItem('karyawanData', JSON.stringify(karyawanData));
+            localStorage.setItem('mandorPasswords', JSON.stringify(mandorPasswords));
+            
+            // Refresh UI
+            loadMandorManagementList();
+            updateMandorModal();
+            hideManagementForm();
+            
+            alert(`✅ Mandor "${name}" berhasil ditambahkan!`);
+        }
+
+        function addNewKaryawan() {
+            const name = document.getElementById('newKaryawanName').value.trim();
+            
+            if (!name) {
+                alert('Nama karyawan tidak boleh kosong!');
+                return;
+            }
+            
+            if (karyawanData[selectedMandorForManagement].includes(name)) {
+                alert('Karyawan dengan nama tersebut sudah ada!');
+                return;
+            }
+            
+            // Add new karyawan
+            karyawanData[selectedMandorForManagement].push(name);
+            
+            // Save to localStorage
+            localStorage.setItem('karyawanData', JSON.stringify(karyawanData));
+            
+            // Refresh UI
+            loadKaryawanManagementList(selectedMandorForManagement);
+            hideManagementForm();
+            
+            alert(`✅ Karyawan "${name}" berhasil ditambahkan ke mandor ${selectedMandorForManagement}!`);
+        }
+
+        function deleteMandor(mandor) {
+            if (!confirm(`Yakin ingin menghapus mandor "${mandor}" beserta semua karyawannya?`)) {
+                return;
+            }
+            
+            // Delete mandor
+            delete karyawanData[mandor];
+            delete mandorPasswords[mandor];
+            
+            // Save to localStorage
+            localStorage.setItem('karyawanData', JSON.stringify(karyawanData));
+            localStorage.setItem('mandorPasswords', JSON.stringify(mandorPasswords));
+            
+            // Reset selection if deleted mandor was selected
+            if (selectedMandorForManagement === mandor) {
+                selectedMandorForManagement = '';
+                document.getElementById('selectedMandorForManagement').textContent = 'Pilih Mandor';
+                document.getElementById('addKaryawanBtn').disabled = true;
+                document.getElementById('karyawanManagementList').innerHTML = '<p class="text-gray-500 text-center py-4">Pilih mandor untuk melihat karyawan</p>';
+            }
+            
+            // Refresh UI
+            loadMandorManagementList();
+            updateMandorModal();
+            
+            alert(`✅ Mandor "${mandor}" berhasil dihapus!`);
+        }
+
+        function deleteKaryawan(mandor, karyawan) {
+            if (!confirm(`Yakin ingin menghapus karyawan "${karyawan}" dari mandor ${mandor}?`)) {
+                return;
+            }
+            
+            // Delete karyawan
+            const index = karyawanData[mandor].indexOf(karyawan);
+            if (index > -1) {
+                karyawanData[mandor].splice(index, 1);
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('karyawanData', JSON.stringify(karyawanData));
+            
+            // Refresh UI
+            loadKaryawanManagementList(mandor);
+            
+            alert(`✅ Karyawan "${karyawan}" berhasil dihapus!`);
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modals = ['mandorModal', 'pekerjaanModal', 'blokModal', 'karyawanModal', 'warningModal', 'successModal', 'passwordModal', 'managementPasswordModal', 'rekapPasswordModal', 'exportModal', 'tutupBukuModal', 'rekapitulasiModal', 'managementModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97198c82850aea7a',t:'MTc1NTYwNTQzOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
